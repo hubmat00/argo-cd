@@ -339,7 +339,7 @@ The filename can always be accessed using `{{path.filename}}`.
 
 ### Exclude files
 
-The Git file generator also supports an `exclude` option in order to exclude files in the repository from being scanned by the ApplicationSet controller:
+The Git file generator also supports an `exclude` option in order to exclude files/folders in the repository from being scanned by the ApplicationSet controller:
 
 ```yaml
 apiVersion: argoproj.io/v1alpha1
@@ -373,7 +373,7 @@ spec:
 ```
 (*The full example can be found [here](https://github.com/argoproj/argo-cd/tree/master/applicationset/examples/git-generator-files-discovery/excludes).*)
 
-This example excludes the config.json file in the `dev` directory from the list of files scanned for this `ApplictionSet` resource.
+This example excludes the config.json file in the `dev` directory from the list of files scanned for this `ApplicationSet` resource.
 
 File exclude paths are matched using [doublestar.Match](https://github.com/bmatcuk/doublestar/blob/master/match.go#L8)
 

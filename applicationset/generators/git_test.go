@@ -1087,6 +1087,51 @@ cluster:
 			},
 			expectedError: nil,
 		},
+		{
+			name:  "test compatibility with greedy git file generator globbing and exclude filter",
+			files: []argoprojiov1alpha1.GitGeneratorItem{{Path: "some-path/*.yaml"}},
+			repoFileContents: map[string][]byte{
+				"some-path/values.yaml": []byte(`
+cluster:
+  owner: john.doe@example.com
+  name: production
+  address: https://kubernetes.default.svc
+`),
+				"some-path/staging/values.yaml": []byte(`
+cluster:
+  owner: foo.bar@example.com
+  name: staging
+  address: https://kubernetes.default.svc
+`),
+			},
+			repoPathsError: nil,
+			expected: []map[string]interface{}{
+				{
+					"cluster.owner":           "john.doe@example.com",
+					"cluster.name":            "production",
+					"cluster.address":         "https://kubernetes.default.svc",
+					"path":                    "some-path",
+					"path.basename":           "some-path",
+					"path[0]":                 "some-path",
+					"path.basenameNormalized": "some-path",
+					"path.filename":           "values.yaml",
+					"path.filenameNormalized": "values.yaml",
+				},
+				{
+					"cluster.owner":           "foo.bar@example.com",
+					"cluster.name":            "staging",
+					"cluster.address":         "https://kubernetes.default.svc",
+					"path":                    "some-path/staging",
+					"path.basename":           "staging",
+					"path[0]":                 "some-path",
+					"path[1]":                 "staging",
+					"path.basenameNormalized": "staging",
+					"path.filename":           "values.yaml",
+					"path.filenameNormalized": "values.yaml",
+				},
+			},
+			expectedError: nil,
+		},
 	}
 
 	for _, testCase := range cases {

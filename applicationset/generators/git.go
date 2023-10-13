@@ -101,15 +101,17 @@ func (g *GitGenerator) generateParamsForGitDirectories(appSetGenerator *argoproj
 
 func (g *GitGenerator) generateParamsForGitFiles(appSetGenerator *argoprojiov1alpha1.ApplicationSetGenerator, useGoTemplate bool, goTemplateOptions []string) ([]map[string]interface{}, error) {
 
-	// Get all files that match the requested path string, removing duplicates
+	// Get all files that match the requested path string but are not configured as excludes, removing duplicates
 	allFiles := make(map[string][]byte)
 	for _, requestedPath := range appSetGenerator.Git.Files {
-		files, err := g.repos.GetFiles(context.TODO(), appSetGenerator.Git.RepoURL, appSetGenerator.Git.Revision, requestedPath.Path)
-		if err != nil {
-			return nil, err
-		}
-		for filePath, content := range files {
-			allFiles[filePath] = content
+		if !requestedPath.Exclude {
+			files, err := g.repos.GetFiles(context.TODO(), appSetGenerator.Git.RepoURL, appSetGenerator.Git.Revision, requestedPath.Path)
+			if err != nil {
+				return nil, err
+			}
+			for filePath, content := range files {
+				allFiles[filePath] = content
+			}
 		}
 	}
 
@@ -121,7 +123,7 @@ func (g *GitGenerator) generateParamsForGitFiles(appSetGenerator *argoprojiov1al
 	}
 	sort.Strings(allPaths)
 
-	filteredPaths := g.filterPaths(appSetGenerator.Git.Files, allPaths)
+	filteredPaths := g.filterFilePaths(appSetGenerator.Git.Files, allPaths)
 
 	// Generate params from each path, and return
 	res := []map[string]interface{}{}
@@ -243,23 +245,26 @@ func (g *GitGenerator) filterApps(Directories []argoprojiov1alpha1.GitGeneratorI
 	return res
 }
 
-func (g *GitGenerator) filterPaths(items []argoprojiov1alpha1.GitGeneratorItem, allPaths []string) []string {
+func (g *GitGenerator) filterFilePaths(Files []argoprojiov1alpha1.GitGeneratorItem, allPaths []string) []string {
 	res := []string{}
 	for _, itemPath := range allPaths {
 		include := false
 		exclude := false
-		for _, requestedPath := range items {
-			match, err := doublestar.Match(requestedPath.Path, itemPath)
-			if err != nil {
-				log.WithError(err).WithField("requestedPath", requestedPath).
-					WithField("appPath", itemPath).Error("error while matching appPath to requestedPath")
-				continue
-			}
-			if match && !requestedPath.Exclude {
+		for _, requestedPath := range Files {
+			// exec doublestar.Match only on excluded requestedPaths to stay backwards-compatible with the default
+			// greedy git file generator globbing
+			if requestedPath.Exclude {
+				match, err := doublestar.Match(requestedPath.Path, itemPath)
+				if err != nil {
+					log.WithError(err).WithField("requestedPath", requestedPath).
+						WithField("appPath", itemPath).Error("error while matching appPath to requestedPath")
+					continue
+				}
+				if match {
+					exclude = true
+				}
+			} else {
 				include = true
-			}
-			if match && requestedPath.Exclude {
-				exclude = true
 			}
 		}
 		// Whenever there is a path with exclude: true it wont be included, even if it is included in a different path pattern
