@@ -3,6 +3,7 @@ package generators
 import (
 	"context"
 	"fmt"
+	"github.com/bmatcuk/doublestar/v4"
 	"path"
 	"sort"
 	"strconv"
@@ -120,9 +121,11 @@ func (g *GitGenerator) generateParamsForGitFiles(appSetGenerator *argoprojiov1al
 	}
 	sort.Strings(allPaths)
 
+	filteredPaths := g.filterPaths(appSetGenerator.Git.Files, allPaths)
+
 	// Generate params from each path, and return
 	res := []map[string]interface{}{}
-	for _, path := range allPaths {
+	for _, path := range filteredPaths {
 
 		// A JSON / YAML file path can contain multiple sets of parameters (ie it is an array)
 		paramsArray, err := g.generateParamsFromGitFile(path, allFiles[path], appSetGenerator.Git.Values, useGoTemplate, goTemplateOptions, appSetGenerator.Git.PathParamPrefix)
@@ -212,7 +215,7 @@ func (g *GitGenerator) generateParamsFromGitFile(filePath string, fileContent []
 	return res, nil
 }
 
-func (g *GitGenerator) filterApps(Directories []argoprojiov1alpha1.GitDirectoryGeneratorItem, allPaths []string) []string {
+func (g *GitGenerator) filterApps(Directories []argoprojiov1alpha1.GitGeneratorItem, allPaths []string) []string {
 	res := []string{}
 	for _, appPath := range allPaths {
 		appInclude := false
@@ -235,6 +238,33 @@ func (g *GitGenerator) filterApps(Directories []argoprojiov1alpha1.GitDirectoryG
 		// Whenever there is a path with exclude: true it wont be included, even if it is included in a different path pattern
 		if appInclude && !appExclude {
 			res = append(res, appPath)
+		}
+	}
+	return res
+}
+
+func (g *GitGenerator) filterPaths(items []argoprojiov1alpha1.GitGeneratorItem, allPaths []string) []string {
+	res := []string{}
+	for _, itemPath := range allPaths {
+		include := false
+		exclude := false
+		for _, requestedPath := range items {
+			match, err := doublestar.Match(requestedPath.Path, itemPath)
+			if err != nil {
+				log.WithError(err).WithField("requestedPath", requestedPath).
+					WithField("appPath", itemPath).Error("error while matching appPath to requestedPath")
+				continue
+			}
+			if match && !requestedPath.Exclude {
+				include = true
+			}
+			if match && requestedPath.Exclude {
+				exclude = true
+			}
+		}
+		// Whenever there is a path with exclude: true it wont be included, even if it is included in a different path pattern
+		if include && !exclude {
+			res = append(res, itemPath)
 		}
 	}
 	return res
